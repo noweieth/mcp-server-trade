@@ -48,12 +48,14 @@ const ToolInputSchemas = {
         size: z.string().describe("Position size in base asset (e.g., '0.01')"),
         type: z.enum(["Market", "Limit", "Stop Loss", "Take Profit"]).default("Limit"),
         reduceOnly: z.boolean().default(false).describe("true if only closing a position"),
-        vaultAddress: z.string().optional().describe("Optional 42-character Vault/Subaccount address if trading via API Wallet")
+        vaultAddress: z.string().optional().describe("Optional 42-character Vault/Subaccount address if trading via API Wallet"),
+        privateKey: z.string().optional().describe("Optional private key for signing. Falls back to HL_PRIVATE_KEY env var")
     }),
     cancel_order: z.object({
         symbol: z.string(),
         oid: z.number().describe("Order ID to cancel"),
-        vaultAddress: z.string().optional().describe("Optional Vault/Subaccount address")
+        vaultAddress: z.string().optional().describe("Optional Vault/Subaccount address"),
+        privateKey: z.string().optional().describe("Optional private key for signing")
     }),
     get_all_mids: z.object({}),
     get_frontend_open_orders: z.object({ userAddress: z.string() }),
@@ -86,22 +88,26 @@ const ToolInputSchemas = {
         oid: z.number().describe("Order ID to query")
     }),
     set_referrer: z.object({
-        code: z.string().describe("Referral code to apply")
+        code: z.string().describe("Referral code to apply"),
+        privateKey: z.string().optional().describe("Optional private key for signing")
     }),
     approve_builder_fee: z.object({
         builder: z.string().describe("Builder address (42 hex)"),
-        maxFeeRate: z.string().describe("Max fee rate as percent string, e.g. '0.01%'")
+        maxFeeRate: z.string().describe("Max fee rate as percent string, e.g. '0.01%'"),
+        privateKey: z.string().optional().describe("Optional private key for signing")
     }),
     update_leverage: z.object({
         symbol: z.string(),
         leverage: z.number().describe("Leverage multiplier (1-100)"),
         isCross: z.boolean().default(true).describe("true for cross margin, false for isolated"),
-        vaultAddress: z.string().optional()
+        vaultAddress: z.string().optional(),
+        privateKey: z.string().optional().describe("Optional private key for signing")
     }),
     update_isolated_margin: z.object({
         symbol: z.string(),
         amount: z.number().describe("USDC amount to add (positive) or remove (negative)"),
-        vaultAddress: z.string().optional()
+        vaultAddress: z.string().optional(),
+        privateKey: z.string().optional().describe("Optional private key for signing")
     }),
     modify_order: z.object({
         symbol: z.string(),
@@ -111,13 +117,16 @@ const ToolInputSchemas = {
         size: z.string(),
         type: z.enum(["Market", "Limit", "Stop Loss", "Take Profit"]).default("Limit"),
         reduceOnly: z.boolean().default(false),
-        vaultAddress: z.string().optional()
+        vaultAddress: z.string().optional(),
+        privateKey: z.string().optional().describe("Optional private key for signing")
     }),
     cancel_all_orders: z.object({
-        vaultAddress: z.string().optional()
+        vaultAddress: z.string().optional(),
+        privateKey: z.string().optional().describe("Optional private key for signing")
     }),
     schedule_cancel: z.object({
-        time: z.number().nullable().describe("UTC ms timestamp to cancel all orders, or null to unset")
+        time: z.number().nullable().describe("UTC ms timestamp to cancel all orders, or null to unset"),
+        privateKey: z.string().optional().describe("Optional private key for signing")
     }),
     twap_order: z.object({
         symbol: z.string(),
@@ -126,15 +135,18 @@ const ToolInputSchemas = {
         reduceOnly: z.boolean().default(false),
         minutes: z.number().describe("TWAP duration in minutes"),
         randomize: z.boolean().default(true),
-        vaultAddress: z.string().optional()
+        vaultAddress: z.string().optional(),
+        privateKey: z.string().optional().describe("Optional private key for signing")
     }),
     cancel_twap_order: z.object({
         symbol: z.string(),
         twapId: z.number().describe("TWAP order ID to cancel"),
-        vaultAddress: z.string().optional()
+        vaultAddress: z.string().optional(),
+        privateKey: z.string().optional().describe("Optional private key for signing")
     }),
     create_sub_account: z.object({
-        name: z.string().describe("Subaccount name")
+        name: z.string().describe("Subaccount name"),
+        privateKey: z.string().optional().describe("Optional private key for signing")
     }),
     get_portfolio_summary: z.object({
         userAddress: z.string()
@@ -871,12 +883,12 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
             }
             case "place_order": {
                 const parsed = ToolInputSchemas.place_order.parse(args);
-                result = await hl.placeOrder(parsed.symbol, parsed.isBuy, parsed.price, parsed.size, parsed.type as any, parsed.reduceOnly, parsed.vaultAddress);
+                result = await hl.placeOrder(parsed.symbol, parsed.isBuy, parsed.price, parsed.size, parsed.type as any, parsed.reduceOnly, parsed.vaultAddress, parsed.privateKey);
                 break;
             }
             case "cancel_order": {
                 const parsed = ToolInputSchemas.cancel_order.parse(args);
-                result = await hl.cancelOrder(parsed.symbol, parsed.oid, parsed.vaultAddress);
+                result = await hl.cancelOrder(parsed.symbol, parsed.oid, parsed.vaultAddress, parsed.privateKey);
                 break;
             }
             case "get_all_mids":
@@ -939,52 +951,52 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
             }
             case "set_referrer": {
                 const parsed = ToolInputSchemas.set_referrer.parse(args);
-                result = await hl.setReferrer(parsed.code);
+                result = await hl.setReferrer(parsed.code, parsed.privateKey);
                 break;
             }
             case "approve_builder_fee": {
                 const parsed = ToolInputSchemas.approve_builder_fee.parse(args);
-                result = await hl.approveBuilderFee(parsed.builder, parsed.maxFeeRate);
+                result = await hl.approveBuilderFee(parsed.builder, parsed.maxFeeRate, parsed.privateKey);
                 break;
             }
             case "update_leverage": {
                 const parsed = ToolInputSchemas.update_leverage.parse(args);
-                result = await hl.updateLeverage(parsed.symbol, parsed.leverage, parsed.isCross, parsed.vaultAddress);
+                result = await hl.updateLeverage(parsed.symbol, parsed.leverage, parsed.isCross, parsed.vaultAddress, parsed.privateKey);
                 break;
             }
             case "update_isolated_margin": {
                 const parsed = ToolInputSchemas.update_isolated_margin.parse(args);
-                result = await hl.updateIsolatedMargin(parsed.symbol, parsed.amount, parsed.vaultAddress);
+                result = await hl.updateIsolatedMargin(parsed.symbol, parsed.amount, parsed.vaultAddress, parsed.privateKey);
                 break;
             }
             case "modify_order": {
                 const parsed = ToolInputSchemas.modify_order.parse(args);
-                result = await hl.modifyOrder(parsed.symbol, parsed.oid, parsed.isBuy, parsed.price, parsed.size, parsed.type as any, parsed.reduceOnly, parsed.vaultAddress);
+                result = await hl.modifyOrder(parsed.symbol, parsed.oid, parsed.isBuy, parsed.price, parsed.size, parsed.type as any, parsed.reduceOnly, parsed.vaultAddress, parsed.privateKey);
                 break;
             }
             case "cancel_all_orders": {
                 const parsed = ToolInputSchemas.cancel_all_orders.parse(args);
-                result = await hl.cancelAllOrders(parsed.vaultAddress);
+                result = await hl.cancelAllOrders(parsed.vaultAddress, parsed.privateKey);
                 break;
             }
             case "schedule_cancel": {
                 const parsed = ToolInputSchemas.schedule_cancel.parse(args);
-                result = await hl.scheduleCancel(parsed.time);
+                result = await hl.scheduleCancel(parsed.time, undefined, parsed.privateKey);
                 break;
             }
             case "twap_order": {
                 const parsed = ToolInputSchemas.twap_order.parse(args);
-                result = await hl.twapOrder(parsed.symbol, parsed.isBuy, parsed.size, parsed.reduceOnly, parsed.minutes, parsed.randomize, parsed.vaultAddress);
+                result = await hl.twapOrder(parsed.symbol, parsed.isBuy, parsed.size, parsed.reduceOnly, parsed.minutes, parsed.randomize, parsed.vaultAddress, parsed.privateKey);
                 break;
             }
             case "cancel_twap_order": {
                 const parsed = ToolInputSchemas.cancel_twap_order.parse(args);
-                result = await hl.cancelTwapOrder(parsed.symbol, parsed.twapId, parsed.vaultAddress);
+                result = await hl.cancelTwapOrder(parsed.symbol, parsed.twapId, parsed.vaultAddress, parsed.privateKey);
                 break;
             }
             case "create_sub_account": {
                 const parsed = ToolInputSchemas.create_sub_account.parse(args);
-                result = await hl.createSubAccount(parsed.name);
+                result = await hl.createSubAccount(parsed.name, parsed.privateKey);
                 break;
             }
             case "get_portfolio_summary": {

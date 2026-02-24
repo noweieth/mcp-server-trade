@@ -22,11 +22,11 @@ const PHANTOM_AGENT_TYPES = {
     ],
 };
 
-// Get Private Key from environment variables
-function getSigner() {
-    const pk = process.env.HL_PRIVATE_KEY || process.env.HL_API_WALLET_SECRET;
+// Get signer wallet — accepts optional privateKey, falls back to env
+function getSigner(privateKey?: string) {
+    const pk = privateKey || process.env.HL_PRIVATE_KEY || process.env.HL_API_WALLET_SECRET;
     if (!pk) {
-        throw new Error("Missing HL_PRIVATE_KEY or HL_API_WALLET_SECRET in .env");
+        throw new Error("No privateKey provided and no HL_PRIVATE_KEY or HL_API_WALLET_SECRET in env");
     }
     return new ethers.Wallet(pk);
 }
@@ -229,9 +229,10 @@ export async function placeOrder(
     size: string, 
     type: "Market" | "Limit" | "Stop Loss" | "Take Profit" = "Limit",
     reduceOnly: boolean = false,
-    vaultAddress?: string
+    vaultAddress?: string,
+    privateKey?: string
 ) {
-    const wallet = getSigner();
+    const wallet = getSigner(privateKey);
     
     // Get Asset ID from metadata (mapping Symbol to integer ID)
     const meta: any = await getMarkets();
@@ -277,8 +278,8 @@ export async function placeOrder(
  * @param oid Order ID as string or number
  * @param vaultAddress optional vault address
  */
-export async function cancelOrder(symbol: string, oid: number, vaultAddress?: string) {
-    const wallet = getSigner();
+export async function cancelOrder(symbol: string, oid: number, vaultAddress?: string, privateKey?: string) {
+    const wallet = getSigner(privateKey);
     
     // Get Asset ID
     const meta: any = await getMarkets();
@@ -497,8 +498,8 @@ async function signUserSignedAction(
  * Set referral code for the account
  * Uses phantom agent signing (vault_address = None per SDK)
  */
-export async function setReferrer(code: string) {
-    const wallet = getSigner();
+export async function setReferrer(code: string, privateKey?: string) {
+    const wallet = getSigner(privateKey);
     const action = { type: "setReferrer", code };
     const nonce = Date.now();
     const signature = await signL1Action(wallet, action, nonce, undefined);
@@ -509,8 +510,8 @@ export async function setReferrer(code: string) {
  * Approve a builder fee rate for a builder address
  * Uses user-signed EIP-712 (HyperliquidSignTransaction domain)
  */
-export async function approveBuilderFee(builder: string, maxFeeRate: string) {
-    const wallet = getSigner();
+export async function approveBuilderFee(builder: string, maxFeeRate: string, privateKey?: string) {
+    const wallet = getSigner(privateKey);
     const nonce = Date.now();
     const action: any = {
         type: "approveBuilderFee",
@@ -538,8 +539,8 @@ export async function approveBuilderFee(builder: string, maxFeeRate: string) {
  * @param leverage integer (1-100)
  * @param isCross true for cross, false for isolated
  */
-export async function updateLeverage(symbol: string, leverage: number, isCross: boolean = true, vaultAddress?: string) {
-    const wallet = getSigner();
+export async function updateLeverage(symbol: string, leverage: number, isCross: boolean = true, vaultAddress?: string, privateKey?: string) {
+    const wallet = getSigner(privateKey);
     const meta: any = await getMarkets();
     const universe = meta[0].universe;
     const assetIndex = universe.findIndex((c: any) => c.name === symbol);
@@ -562,8 +563,8 @@ export async function updateLeverage(symbol: string, leverage: number, isCross: 
  * @param symbol e.g., "BTC"
  * @param amount USDC amount to add (positive) or remove (negative)
  */
-export async function updateIsolatedMargin(symbol: string, amount: number, vaultAddress?: string) {
-    const wallet = getSigner();
+export async function updateIsolatedMargin(symbol: string, amount: number, vaultAddress?: string, privateKey?: string) {
+    const wallet = getSigner(privateKey);
     const meta: any = await getMarkets();
     const universe = meta[0].universe;
     const assetIndex = universe.findIndex((c: any) => c.name === symbol);
@@ -595,9 +596,10 @@ export async function modifyOrder(
     size: string,
     type: "Market" | "Limit" | "Stop Loss" | "Take Profit" = "Limit",
     reduceOnly: boolean = false,
-    vaultAddress?: string
+    vaultAddress?: string,
+    privateKey?: string
 ) {
-    const wallet = getSigner();
+    const wallet = getSigner(privateKey);
     const meta: any = await getMarkets();
     const universe = meta[0].universe;
     const assetIndex = universe.findIndex((c: any) => c.name === symbol);
@@ -633,8 +635,8 @@ export async function modifyOrder(
 /**
  * Cancel ALL open orders for the signer's address (emergency kill switch)
  */
-export async function cancelAllOrders(vaultAddress?: string) {
-    const wallet = getSigner();
+export async function cancelAllOrders(vaultAddress?: string, privateKey?: string) {
+    const wallet = getSigner(privateKey);
     const userAddress = wallet.address;
     const orders: any[] = await getOpenOrders(userAddress);
     if (orders.length === 0) return { status: "ok", message: "No open orders to cancel" };
@@ -658,8 +660,8 @@ export async function cancelAllOrders(vaultAddress?: string) {
  * Schedule cancel (dead man's switch)
  * @param time UTC timestamp in ms to cancel all orders. null to unset.
  */
-export async function scheduleCancel(time: number | null, vaultAddress?: string) {
-    const wallet = getSigner();
+export async function scheduleCancel(time: number | null, vaultAddress?: string, privateKey?: string) {
+    const wallet = getSigner(privateKey);
     const action: any = { type: "scheduleCancel" };
     if (time !== null) action.time = time;
     const nonce = Date.now();
@@ -684,9 +686,10 @@ export async function twapOrder(
     reduceOnly: boolean,
     minutes: number,
     randomize: boolean = true,
-    vaultAddress?: string
+    vaultAddress?: string,
+    privateKey?: string
 ) {
-    const wallet = getSigner();
+    const wallet = getSigner(privateKey);
     const meta: any = await getMarkets();
     const universe = meta[0].universe;
     const assetIndex = universe.findIndex((c: any) => c.name === symbol);
@@ -713,8 +716,8 @@ export async function twapOrder(
 /**
  * Cancel a TWAP order
  */
-export async function cancelTwapOrder(symbol: string, twapId: number, vaultAddress?: string) {
-    const wallet = getSigner();
+export async function cancelTwapOrder(symbol: string, twapId: number, vaultAddress?: string, privateKey?: string) {
+    const wallet = getSigner(privateKey);
     const meta: any = await getMarkets();
     const universe = meta[0].universe;
     const assetIndex = universe.findIndex((c: any) => c.name === symbol);
@@ -734,8 +737,8 @@ export async function cancelTwapOrder(symbol: string, twapId: number, vaultAddre
 /**
  * Create a subaccount
  */
-export async function createSubAccount(name: string) {
-    const wallet = getSigner();
+export async function createSubAccount(name: string, privateKey?: string) {
+    const wallet = getSigner(privateKey);
     const action = { type: "createSubAccount", name };
     const nonce = Date.now();
     const signature = await signL1Action(wallet, action, nonce, undefined);
