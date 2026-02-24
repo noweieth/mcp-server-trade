@@ -89,6 +89,8 @@ npx tsx src/index.ts
 
 ## MCP Client Configuration
 
+> **Note:** Private key is **optional**. 47/55 tools (market data, signals, analytics, risk) work without any credentials. Only trade execution tools (place_order, cancel_order, etc.) require `HL_PRIVATE_KEY`.
+
 ### Claude Desktop
 
 Add to `~/Library/Application Support/Claude/claude_desktop_config.json`:
@@ -98,10 +100,7 @@ Add to `~/Library/Application Support/Claude/claude_desktop_config.json`:
   "mcpServers": {
     "trading": {
       "command": "node",
-      "args": ["/path/to/mcp-server-trade/dist/index.js"],
-      "env": {
-        "HL_PRIVATE_KEY": "0xYOUR_KEY"
-      }
+      "args": ["/path/to/mcp-server-trade/dist/index.js"]
     }
   }
 }
@@ -110,6 +109,19 @@ Add to `~/Library/Application Support/Claude/claude_desktop_config.json`:
 ### Cursor / VS Code
 
 Add to `.cursor/mcp.json` or equivalent:
+
+```json
+{
+  "mcpServers": {
+    "trading": {
+      "command": "npx",
+      "args": ["tsx", "/path/to/mcp-server-trade/src/index.ts"]
+    }
+  }
+}
+```
+
+If you need trade execution, add the key to your `.env` file or pass it via `env`:
 
 ```json
 {
