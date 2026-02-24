@@ -52,44 +52,44 @@ cd mcp-server-trade
 npm install
 ```
 
-### Configuration
+### Running
+
+Two transport modes available:
 
 ```bash
-cp .env.example .env
+# Mode 1: stdio (for MCP clients — Claude, Gemini CLI, Cursor)
+npm run dev
+
+# Mode 2: HTTP/SSE (for browser, curl, remote clients)
+npm run dev:http            # default port 3000
+npx tsx src/http_server.ts 8080  # custom port
 ```
 
-Edit `.env` and add your Hyperliquid credentials:
-
-```env
-# Option 1: Direct private key
-HL_PRIVATE_KEY=0xYOUR_PRIVATE_KEY_HERE
-
-# Option 2: API wallet (recommended for production)
-HL_API_WALLET_SECRET=0xYOUR_API_WALLET_SECRET_HERE
-```
-
-> **Note:** Read-only tools (market data, signals, analytics) work without credentials. Trading tools require one of the above.
-
-### Build & Run
+### Production Build
 
 ```bash
-# Build TypeScript
-npm run build
-
-# Run server
-npm start
-```
-
-### Development
-
-```bash
-# Run directly without building
-npx tsx src/index.ts
+npm run build   # TypeScript → dist/
+npm start       # node dist/index.js (stdio mode)
 ```
 
 ## MCP Client Configuration
 
-> **Note:** Private key is **optional**. 47/55 tools (market data, signals, analytics, risk) work without any credentials. Only trade execution tools (place_order, cancel_order, etc.) require `HL_PRIVATE_KEY`.
+> **Private key is optional.** All read-only tools (market data, signals, analytics, risk) work without credentials. Trading tools accept `privateKey` as a per-request parameter — no need to configure keys in MCP config.
+
+### Gemini CLI
+
+Add to `.gemini/settings.json` (project or global):
+
+```json
+{
+  "mcpServers": {
+    "trading": {
+      "command": "npx",
+      "args": ["tsx", "/absolute/path/to/mcp-server-trade/src/index.ts"]
+    }
+  }
+}
+```
 
 ### Claude Desktop
 
@@ -99,8 +99,8 @@ Add to `~/Library/Application Support/Claude/claude_desktop_config.json`:
 {
   "mcpServers": {
     "trading": {
-      "command": "node",
-      "args": ["/path/to/mcp-server-trade/dist/index.js"]
+      "command": "npx",
+      "args": ["tsx", "/absolute/path/to/mcp-server-trade/src/index.ts"]
     }
   }
 }
@@ -108,34 +108,52 @@ Add to `~/Library/Application Support/Claude/claude_desktop_config.json`:
 
 ### Cursor / VS Code
 
-Add to `.cursor/mcp.json` or equivalent:
+Add to `.cursor/mcp.json`:
 
 ```json
 {
   "mcpServers": {
     "trading": {
       "command": "npx",
-      "args": ["tsx", "/path/to/mcp-server-trade/src/index.ts"]
+      "args": ["tsx", "/absolute/path/to/mcp-server-trade/src/index.ts"]
     }
   }
 }
 ```
 
-If you need trade execution, add the key to your `.env` file or pass it via `env`:
+### HTTP/SSE Mode (MCP Inspector, remote clients)
+
+```bash
+npm run dev:http
+```
+
+```
+GET  http://localhost:3000/sse       → SSE stream (MCP client connects here)
+POST http://localhost:3000/messages  → JSON-RPC messages
+GET  http://localhost:3000/health    → Health check
+```
+
+## Multi-Wallet Support
+
+All 12 trading tools accept an optional `privateKey` parameter per-request. No need to restart the server or configure separate instances.
 
 ```json
 {
-  "mcpServers": {
-    "trading": {
-      "command": "npx",
-      "args": ["tsx", "/path/to/mcp-server-trade/src/index.ts"],
-      "env": {
-        "HL_PRIVATE_KEY": "0xYOUR_KEY"
-      }
-    }
+  "name": "place_order",
+  "arguments": {
+    "symbol": "BTC",
+    "isBuy": true,
+    "price": "60000",
+    "size": "0.01",
+    "privateKey": "0xYOUR_PRIVATE_KEY"
   }
 }
 ```
+
+If `privateKey` is not provided, the server falls back to `HL_PRIVATE_KEY` or `HL_API_WALLET_SECRET` from environment variables. If neither exists, an error is returned.
+
+Tools that support `privateKey`:
+`place_order` · `cancel_order` · `modify_order` · `cancel_all_orders` · `schedule_cancel` · `twap_order` · `cancel_twap_order` · `update_leverage` · `update_isolated_margin` · `set_referrer` · `approve_builder_fee` · `create_sub_account`
 
 ## All 55 Tools
 
@@ -238,13 +256,15 @@ If you need trade execution, add the key to your `.env` file or pass it via `env
 
 ```
 src/
-├── index.ts          # Entry point (stdio transport)
-├── mcp_server.ts     # MCP server: schemas, tool definitions, handlers
-├── hyperliquid.ts    # Hyperliquid API client + risk/analytics tools
-├── aixbt.ts          # AIXBT sentiment API client
-└── signal.ts         # Technical analysis signal detection
+├── index.ts          # Stdio transport (MCP clients)
+├── http_server.ts    # HTTP/SSE transport (localhost)
+├── mcp_server.ts     # Tool schemas, definitions, handlers
+├── hyperliquid.ts    # Hyperliquid API + risk + analytics
+├── aixbt.ts          # AIXBT sentiment API
+└── signal.ts         # Technical analysis signals
 ```
 
 ## License
 
 ISC
+
