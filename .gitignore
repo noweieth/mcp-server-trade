@@ -1,6 +1,9 @@
 # Dependencies
 node_modules/
 
+# Test files (may contain sensitive keys)
+src/test_client.ts
+
 # Environment
 .env
 .env.local
