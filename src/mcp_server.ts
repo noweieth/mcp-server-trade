@@ -4,6 +4,8 @@ import { z } from "zod";
 import * as hl from "./hyperliquid.js";
 import * as aixbt from "./aixbt.js";
 import * as sig from "./signal.js";
+import * as tg from "./telegram.js";
+import * as chart from "./chart.js";
 
 // Initialize Server instance
 export const server = new Server(
@@ -259,6 +261,40 @@ const ToolInputSchemas = {
         interval: z.string().default("1h").describe("Higher TF recommended: 1h, 4h"),
         lookback: z.number().default(100).describe("Number of candles to scan"),
         tolerance: z.number().default(0.003).describe("Cluster tolerance (0.003 = 0.3%)")
+    }),
+    // Telegram
+    send_telegram_message: z.object({
+        botToken: z.string().describe("Telegram Bot API token"),
+        chatId: z.string().describe("Chat/Group ID to send to"),
+        text: z.string().describe("Message text"),
+        parseMode: z.enum(["Markdown", "HTML"]).default("Markdown").optional().describe("Text formatting mode")
+    }),
+    send_telegram_photo: z.object({
+        botToken: z.string().describe("Telegram Bot API token"),
+        chatId: z.string().describe("Chat/Group ID"),
+        photoBase64: z.string().describe("Base64-encoded PNG image"),
+        caption: z.string().optional().describe("Photo caption"),
+        parseMode: z.enum(["Markdown", "HTML"]).default("Markdown").optional()
+    }),
+    send_telegram_document: z.object({
+        botToken: z.string().describe("Telegram Bot API token"),
+        chatId: z.string().describe("Chat/Group ID"),
+        documentBase64: z.string().describe("Base64-encoded file content"),
+        filename: z.string().describe("Filename with extension, e.g. 'report.csv'"),
+        caption: z.string().optional().describe("Document caption")
+    }),
+    // Chart Generation
+    generate_price_chart: z.object({
+        symbol: z.string().describe("Coin symbol, e.g. BTC"),
+        interval: z.string().default("15m").describe("Candle interval"),
+        count: z.number().default(100).describe("Number of candles to chart")
+    }),
+    generate_portfolio_chart: z.object({
+        userAddress: z.string().describe("42-character ETH wallet address")
+    }),
+    generate_pnl_chart: z.object({
+        userAddress: z.string().describe("42-character ETH wallet address"),
+        days: z.number().default(30).describe("Lookback period in days")
     })
 };
 
@@ -832,6 +868,88 @@ const ToolDefinitions: Array<{ name: string; description: string; inputSchema: R
             },
             required: ["symbol"]
         }
+    },
+    // ── Telegram ─────────────────────────────────────────
+    {
+        name: "send_telegram_message",
+        description: "Send a text message to Telegram (Markdown or HTML). Stateless — provide botToken per-request, no env config needed",
+        inputSchema: {
+            type: "object",
+            properties: {
+                botToken: { type: "string", description: "Telegram Bot API token" },
+                chatId: { type: "string", description: "Chat/Group ID" },
+                text: { type: "string", description: "Message text" },
+                parseMode: { type: "string", enum: ["Markdown", "HTML"], default: "Markdown" }
+            },
+            required: ["botToken", "chatId", "text"]
+        }
+    },
+    {
+        name: "send_telegram_photo",
+        description: "Send a photo (base64 PNG) to Telegram with optional caption. Use with chart tools to send generated charts",
+        inputSchema: {
+            type: "object",
+            properties: {
+                botToken: { type: "string", description: "Telegram Bot API token" },
+                chatId: { type: "string", description: "Chat/Group ID" },
+                photoBase64: { type: "string", description: "Base64-encoded PNG image" },
+                caption: { type: "string", description: "Photo caption" },
+                parseMode: { type: "string", enum: ["Markdown", "HTML"], default: "Markdown" }
+            },
+            required: ["botToken", "chatId", "photoBase64"]
+        }
+    },
+    {
+        name: "send_telegram_document",
+        description: "Send a file (base64) to Telegram — CSV reports, logs, etc.",
+        inputSchema: {
+            type: "object",
+            properties: {
+                botToken: { type: "string", description: "Telegram Bot API token" },
+                chatId: { type: "string", description: "Chat/Group ID" },
+                documentBase64: { type: "string", description: "Base64-encoded file" },
+                filename: { type: "string", description: "Filename with extension (e.g. report.csv)" },
+                caption: { type: "string", description: "Document caption" }
+            },
+            required: ["botToken", "chatId", "documentBase64", "filename"]
+        }
+    },
+    // ── Chart Generation ─────────────────────────────────
+    {
+        name: "generate_price_chart",
+        description: "Generate a price chart image (dark theme line chart) for any symbol. Returns base64 PNG — chain with send_telegram_photo to share",
+        inputSchema: {
+            type: "object",
+            properties: {
+                symbol: { type: "string", description: "Coin symbol (e.g. BTC)" },
+                interval: { type: "string", default: "15m", description: "Candle interval" },
+                count: { type: "number", default: 100, description: "Number of candles" }
+            },
+            required: ["symbol"]
+        }
+    },
+    {
+        name: "generate_portfolio_chart",
+        description: "Generate a portfolio allocation chart (doughnut) showing all positions with PnL. Returns base64 PNG",
+        inputSchema: {
+            type: "object",
+            properties: {
+                userAddress: { type: "string", description: "42-char ETH wallet address" }
+            },
+            required: ["userAddress"]
+        }
+    },
+    {
+        name: "generate_pnl_chart",
+        description: "Generate a cumulative PnL equity curve chart from trade history. Returns base64 PNG",
+        inputSchema: {
+            type: "object",
+            properties: {
+                userAddress: { type: "string", description: "42-char ETH wallet address" },
+                days: { type: "number", default: 30, description: "Lookback days" }
+            },
+            required: ["userAddress"]
+        }
     }
 ];
 
@@ -1121,6 +1239,38 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
             case "get_support_resistance": {
                 const parsed = ToolInputSchemas.get_support_resistance.parse(args);
                 result = await sig.getSupportResistance(parsed.symbol, parsed.interval, parsed.lookback, parsed.tolerance);
+                break;
+            }
+            // ── Telegram ──────────────────────────────────
+            case "send_telegram_message": {
+                const parsed = ToolInputSchemas.send_telegram_message.parse(args);
+                result = await tg.sendMessage(parsed.botToken, parsed.chatId, parsed.text, parsed.parseMode || "Markdown");
+                break;
+            }
+            case "send_telegram_photo": {
+                const parsed = ToolInputSchemas.send_telegram_photo.parse(args);
+                result = await tg.sendPhoto(parsed.botToken, parsed.chatId, parsed.photoBase64, parsed.caption, parsed.parseMode || "Markdown");
+                break;
+            }
+            case "send_telegram_document": {
+                const parsed = ToolInputSchemas.send_telegram_document.parse(args);
+                result = await tg.sendDocument(parsed.botToken, parsed.chatId, parsed.documentBase64, parsed.filename, parsed.caption);
+                break;
+            }
+            // ── Chart Generation ──────────────────────────
+            case "generate_price_chart": {
+                const parsed = ToolInputSchemas.generate_price_chart.parse(args);
+                result = await chart.generatePriceChart(parsed.symbol, parsed.interval, parsed.count);
+                break;
+            }
+            case "generate_portfolio_chart": {
+                const parsed = ToolInputSchemas.generate_portfolio_chart.parse(args);
+                result = await chart.generatePortfolioChart(parsed.userAddress);
+                break;
+            }
+            case "generate_pnl_chart": {
+                const parsed = ToolInputSchemas.generate_pnl_chart.parse(args);
+                result = await chart.generatePnlChart(parsed.userAddress, parsed.days);
                 break;
             }
             default:

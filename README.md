@@ -1,6 +1,6 @@
 # MCP Server Trade
 
-A comprehensive MCP (Model Context Protocol) server for cryptocurrency trading on **Hyperliquid DEX**. Provides 55 tools covering market data, order execution, risk management, analytics, sentiment analysis, and technical signal detection.
+A comprehensive MCP (Model Context Protocol) server for cryptocurrency trading on **Hyperliquid DEX**. Provides 61 tools covering market data, order execution, risk management, analytics, sentiment analysis, technical signal detection, chart generation, and Telegram notifications.
 
 Built for AI agents (Claude, Gemini, etc.) to autonomously analyze markets and execute trades.
 
@@ -37,6 +37,16 @@ Built for AI agents (Claude, Gemini, etc.) to autonomously analyze markets and e
 - **ICT** — Fair Value Gaps, Order Blocks, Liquidity Sweeps
 - **Smart Money Concept** — Market structure (HH/HL/LH/LL), BOS, CHoCH, Supply/Demand zones, Liquidity Pools
 - **Support & Resistance** — Swing clustering, strength rating, psychological levels
+
+### 📊 Chart Generation (3 tools)
+- Price chart (line chart with dark theme via QuickChart.io)
+- Portfolio allocation doughnut chart
+- Cumulative PnL equity curve
+
+### 📱 Telegram (3 tools)
+- Send text messages (Markdown/HTML)
+- Send photos (base64 PNG — chain with chart tools)
+- Send documents (CSV, PDF, logs)
 
 ## Quick Start
 
@@ -155,7 +165,7 @@ If `privateKey` is not provided, the server falls back to `HL_PRIVATE_KEY` or `H
 Tools that support `privateKey`:
 `place_order` · `cancel_order` · `modify_order` · `cancel_all_orders` · `schedule_cancel` · `twap_order` · `cancel_twap_order` · `update_leverage` · `update_isolated_margin` · `set_referrer` · `approve_builder_fee` · `create_sub_account`
 
-## All 55 Tools
+## All 61 Tools
 
 <details>
 <summary><strong>Hyperliquid Core (35)</strong></summary>
@@ -252,6 +262,30 @@ Tools that support `privateKey`:
 
 </details>
 
+<details>
+<summary><strong>Chart Generation (3)</strong></summary>
+
+| Tool | Description |
+|---|---|
+| `generate_price_chart` | Price line chart (dark theme) — returns base64 PNG |
+| `generate_portfolio_chart` | Portfolio allocation doughnut chart |
+| `generate_pnl_chart` | Cumulative PnL equity curve |
+
+</details>
+
+<details>
+<summary><strong>Telegram (3)</strong></summary>
+
+| Tool | Description |
+|---|---|
+| `send_telegram_message` | Send text message (Markdown/HTML) |
+| `send_telegram_photo` | Send base64 PNG photo with caption |
+| `send_telegram_document` | Send base64 file (CSV, PDF, etc.) |
+
+> **Note:** All Telegram tools are stateless — `botToken` and `chatId` are passed per-request. No env config needed.
+
+</details>
+
 ## Architecture
 
 ```
@@ -261,7 +295,9 @@ src/
 ├── mcp_server.ts     # Tool schemas, definitions, handlers
 ├── hyperliquid.ts    # Hyperliquid API + risk + analytics
 ├── aixbt.ts          # AIXBT sentiment API
-└── signal.ts         # Technical analysis signals
+├── signal.ts         # Technical analysis signals
+├── chart.ts          # Chart generation (QuickChart.io)
+└── telegram.ts       # Telegram Bot API (stateless)
 ```
 
 ## License
